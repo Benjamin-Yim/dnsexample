@@ -47,6 +47,8 @@ func (e Example) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 	a := dns.Msg{}
 	a.SetReply(r)
 	a.Authoritative = true
+	fmt.Printf("检测到的 Name : %v\n",state.Name())
+	fmt.Printf("检测到的 QName : %v\n",state.QName())
 	fmt.Printf("检测到的 IP : %v\n",state.IP())
 
 	// 然后，我们将通过state helper struct检查传入的消息，以查看应该返回什么信息。
