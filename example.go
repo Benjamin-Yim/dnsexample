@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/coredns/coredns/plugin/metrics"
 	"github.com/coredns/coredns/request"
 	"io"
 	"net"
@@ -43,51 +44,53 @@ func (e Example) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 	// r 是传入的请求
 	// request.Request 是一个抽象都结构，缓存客户单属性
 	state := request.Request{W:w,Req: r}
+	if state.Name() == "example.org." {
 
-	a := dns.Msg{}
-	a.SetReply(r)
-	a.Authoritative = true
+		a := dns.Msg{}
+		a.SetReply(r)
+		a.Authoritative = true
 
-	fmt.Printf("检测到的 Name : %v\n",state.Name())
-	fmt.Printf("检测到的 QName : %v\n",state.QName())
-	fmt.Printf("检测到的 IP : %v\n",state.IP())
+		fmt.Printf("检测到的 Name : %v\n",state.Name())
+		fmt.Printf("检测到的 QName : %v\n",state.QName())
+		fmt.Printf("检测到的 IP : %v\n",state.IP())
 
-	// 然后，我们将通过state helper struct检查传入的消息，以查看应该返回什么信息。
-	//ip := state.IP()
-	fmt.Println("stage.Family:",state.Family())
-	a.Answer = append(a.Answer,MakeRR(state.Family(),"192.168.1.1",state.QName(),state.QClass()))
-	a.Answer = append(a.Answer,MakeRR(state.Family(),"192.168.2.1",state.QName(),state.QClass()))
-	a.Answer = append(a.Answer,MakeRR(state.Family(),"192.168.2.2",state.QName(),state.QClass()))
-	a.Answer = append(a.Answer,MakeRR(state.Family(),"192.168.3.2",state.QName(),state.QClass()))
+		// 然后，我们将通过state helper struct检查传入的消息，以查看应该返回什么信息。
+		//ip := state.IP()
+		fmt.Println("stage.Family:",state.Family())
+		a.Answer = append(a.Answer,MakeRR(state.Family(),"192.168.1.1",state.QName(),state.QClass()))
+		a.Answer = append(a.Answer,MakeRR(state.Family(),"192.168.2.1",state.QName(),state.QClass()))
+		a.Answer = append(a.Answer,MakeRR(state.Family(),"192.168.2.2",state.QName(),state.QClass()))
+		a.Answer = append(a.Answer,MakeRR(state.Family(),"192.168.3.2",state.QName(),state.QClass()))
 
-	// 对端口和传输协议进行编码
-	fmt.Println("对端口和传输协议进行编码")
-	srv := &dns.SRV{}
-	srv.Hdr = dns.RR_Header{Name: "_" + state.Proto() + "." + state.QName(), Rrtype: dns.TypeSRV, Class: state.QClass()}
-	port, _ := strconv.Atoi(state.Port())
-	srv.Port = uint16(port)
-	srv.Target = "."
+		// 对端口和传输协议进行编码
+		fmt.Println("额外的地址")
 
-	// 创建消息并返回
-	a.Extra = []dns.RR{}
-	for i := range a.Answer {
-		a.Extra = append(a.Extra,a.Answer[i])
+
+		// 创建消息并返回
+		a.Extra = []dns.RR{}
+		for _ = range a.Answer {
+			srv := &dns.SRV{}
+			srv.Hdr = dns.RR_Header{Name: "_" + state.Proto() + "." + state.QName(), Rrtype: dns.TypeSRV, Class: state.QClass()}
+			port, _ := strconv.Atoi(state.Port())
+			srv.Port = uint16(port)
+			srv.Target = "."
+			a.Extra = append(a.Extra,srv)
+		}
+		fmt.Println("创建消息并返回")
+		w.WriteMsg(&a)
+		b,_ := json.Marshal(&a)
+		fmt.Println(string(b))
+		return 0, nil
 	}
-	a.Extra = append(a.Extra,srv)
-	fmt.Println("创建消息并返回")
-	w.WriteMsg(&a)
-	b,_ := json.Marshal(&a)
-	fmt.Println(string(b))
-	return 0, nil
 
 	// Wrap.
-	//pw := NewResponsePrinter(w)
-	//
-	//// Export metric with the server label set to the current server handling the request.
-	//requestCount.WithLabelValues(metrics.WithServer(ctx)).Inc()
-	//
-	//// Call next plugin (if any). 调用下一个公有的 DNS
-	//return plugin.NextOrFailure(e.Name(), e.Next, ctx, pw, r)
+	pw := NewResponsePrinter(w)
+
+	// Export metric with the server label set to the current server handling the request.
+	requestCount.WithLabelValues(metrics.WithServer(ctx)).Inc()
+
+	// Call next plugin (if any). 调用下一个公有的 DNS
+	return plugin.NextOrFailure(e.Name(), e.Next, ctx, pw, r)
 }
 
 func MakeRR(Family int, ip,QName string,QClass uint16) dns.RR {
