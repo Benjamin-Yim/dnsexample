@@ -69,7 +69,11 @@ func (e Example) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 	srv.Target = "."
 
 	// 创建消息并返回
-	a.Extra = []dns.RR{rr, srv}
+	a.Extra = []dns.RR{}
+	for i := range a.Answer {
+		a.Extra = append(a.Extra,a.Answer[i])
+	}
+	a.Extra = append(a.Extra,srv)
 	fmt.Println("创建消息并返回")
 	w.WriteMsg(&a)
 	b,_ := json.Marshal(&a)
