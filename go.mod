@@ -1,4 +1,4 @@
-module dnsexample
+module github.com/yanzhongya/dnsexample
 
 go 1.14
 
