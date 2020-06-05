@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/coredns/coredns/plugin/metrics"
 	"github.com/coredns/coredns/request"
 	"io"
 	"net"
@@ -54,7 +55,7 @@ func (e Example) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 	// 然后，我们将通过state helper struct检查传入的消息，以查看应该返回什么信息。
 	ip := state.IP()
 	var rr dns.RR
-	fmt.Println("stage.Family")
+	fmt.Println("stage.Family:",state.Family())
 	switch state.Family() {
 	case 1:
 		rr = &dns.A{}
@@ -78,21 +79,23 @@ func (e Example) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 	srv.Target = "."
 
 	// 创建消息并返回
-	a.Extra = []dns.RR{rr, srv}
-	fmt.Println("创建消息并返回")
-	w.WriteMsg(&a)
-	b,_ := json.Marshal(&a)
-	fmt.Println(string(b))
-	return 0, nil
+	if state.Name() == " example.org." {
+		a.Extra = []dns.RR{rr, srv}
+		fmt.Println("创建消息并返回")
+		w.WriteMsg(&a)
+		b,_ := json.Marshal(&a)
+		fmt.Println(string(b))
+		return 0, nil
+	}
 
 	// Wrap.
-	//pw := NewResponsePrinter(w)
-	//
-	//// Export metric with the server label set to the current server handling the request.
-	//requestCount.WithLabelValues(metrics.WithServer(ctx)).Inc()
-	//
-	//// Call next plugin (if any).
-	//return plugin.NextOrFailure(e.Name(), e.Next, ctx, pw, r)
+	pw := NewResponsePrinter(w)
+
+	// Export metric with the server label set to the current server handling the request.
+	requestCount.WithLabelValues(metrics.WithServer(ctx)).Inc()
+
+	// Call next plugin (if any). 调用下一个公有的 DNS
+	return plugin.NextOrFailure(e.Name(), e.Next, ctx, pw, r)
 }
 
 // Name实现处理程序接口。
